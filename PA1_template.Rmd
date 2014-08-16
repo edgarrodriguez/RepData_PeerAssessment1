@@ -1,20 +1,182 @@
 # Reproducible Research: Peer Assessment 1
 
+The steps to start coding are:  
+
+1. Fork project to your local machine  
+2. Open RSTUDIO (with R version 3.1.1 configured)  
+3. Open PA1_template.Rmd file and code  
 
 ## Loading and preprocessing the data
 
+Then steps to load and preprocess the data are:  
 
+1. Set your working directory to the location you downloaded the project files  
+2. Unzip activity.zip file  
+3. Read activity.csv file  
+
+The code that performs activities 1 2 and 3 is as follows:  
+
+```{r LoadAndPreprocess}
+projectWorkingDirectory <- "D:/Data/personal/Cursos/05 Reproducible Research/RepData_PeerAssessment1"
+setwd(projectWorkingDirectory)
+unzip("activity.zip")
+rawData<-read.csv("activity.csv")
+noNaData<-rawData[!is.na(rawData$steps),]
+noNaData$dateformated<-factor(format(as.Date(noNaData$date),"%C%y-%m-%d %a"))
+NaData<-rawData[is.na(rawData$steps),]
+```
 
 ## What is mean total number of steps taken per day?
+
+1. Make a histogram of the total number of steps taken each day  
+
+```{r HistogramTotalNumberOfStepsPerDay}
+plot(rawData$date,rawData$steps,type="h")
+```
+
+2. Calculate and report the **mean** and **median** total number of steps taken per day  
+
+```{r CalculateMeanTotalNumberOfStepsPerDay}
+
+#This does not work. I do not know why
+#library("plyr", lib.loc="d:/Program Files/R/R-3.1.1/library")
+#dataSummary<-ddply(noNaData,.(dateformated),summarise
+#                ,dailymean=mean(noNaData$steps),dailymedian=median(noNaData$steps))
+#print(dataSummary)
+
+#This works
+dataMean<-as.data.frame(with(noNaData,tapply(steps,dateformated,mean,na.rm=T)))
+dataMean$date<-row.names(dataMean)
+colnames(dataMean)<-c("mean","date")
+dataMedian<-as.data.frame(with(noNaData,tapply(steps,dateformated,median,na.rm=T)))
+dataMedian$date<-row.names(dataMedian)
+colnames(dataMedian)=c("meadian","date")
+dataSummary<-merge(dataMean,dataMedian,by.x="date",by.y="date")
+print(dataSummary)
+```
 
 
 
 ## What is the average daily activity pattern?
 
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis)
+and the average number of steps taken, averaged across all days (y-axis)  
+
+```{r TimeseriesIntervalPerAvgNumberStepsDay}
+dataMeanByinterval<-as.data.frame(with(noNaData,tapply(steps,interval,mean,na.rm=T)))
+dataMeanByinterval$interval<-row.names(dataMeanByinterval)
+colnames(dataMeanByinterval)<-c("mean","interval")
+plot(dataMeanByinterval$interval,dataMeanByinterval$mean,type="l")
+```
+
+
+2. Which 5-minute interval, on average across all the days in the dataset,
+contains the maximum number of steps?  
+
+In order to obtain the result, we sort (decreasing) the vector of means and get the first value  
+Interval 835 has the greater average mean across all days  
+
+```{r IntervalMaxAvgNumberSteps}
+dataMaxMeanByinterval<-with(noNaData,tapply(steps,interval,mean,na.rm=T))
+dataMaxMeanByinterval<-sort(dataMaxMeanByinterval,decreasing=TRUE)
+print(dataMaxMeanByinterval[1])
+```
 
 
 ## Imputing missing values
 
+    
+
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)  
+
+```{r TotalNumberOfMissingValues}
+colSums(is.na(rawData))
+
+```
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.  
+
+We will use the second strategy suggested.
+
+2.1 Extract the data with NAs in a different dataframe.  
+2.2 Merge with Mean By Interval dataframe.  
+2.3 Bind rows of data with NAs (replaced with mean by interval) and without NAs.  
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.  
+
+```{r CreateDataSetWithoutMissingValues}
+NaData<-rawData[is.na(rawData$steps),]
+dataFill<-merge(NaData,dataMeanByinterval,by.x="interval",by.y="interval")
+dataFillNa<-dataFill[,c("mean","date","interval")]
+#dataFillNa$row.names<-NA
+dataFillNa<-dataFillNa[,c("mean","date","interval")]
+colnames(dataFillNa)<-c("steps","date","interval")
+dataFillNa$dateformated<-factor(format(as.Date(dataFillNa$date),"%C%y-%m-%d %a"))
+dataComplete<-rbind(noNaData,dataFillNa)
+
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?  
+
+```{r NewHistogramMeanMedian}
+plot(dataComplete$date,dataComplete$steps,type="h")
+
+dataMeanComplete<-as.data.frame(with(dataComplete,tapply(steps,dateformated,mean,na.rm=T)))
+dataMeanComplete$date<-row.names(dataMeanComplete)
+colnames(dataMeanComplete)<-c("mean","date")
+dataMedianComplete<-as.data.frame(with(dataComplete,tapply(steps,dateformated,median,na.rm=T)))
+dataMedianComplete$date<-row.names(dataMedianComplete)
+colnames(dataMedianComplete)=c("meadian","date")
+dataSummaryComplete<-merge(dataMeanComplete,dataMedianComplete,by.x="date",by.y="date")
+print(dataSummaryComplete)
+
+```
+
+Therese in much impact as we can see comparing medias. Median of certain days change because there 
+was no data instead of 0 steps like most of the days.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.  
+
+1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.  
+
+```{r CreateFactorVariableWeekday}
+dataComplete$weekdayfactor<-factor(ifelse(weekdays(as.Date(dataComplete$date)) %in% c("sábado","domingo"),"weekend","weekday"))
+```
+
+2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). The plot should look something like the following, which was creating using simulated data:  
+
+```{r WeekdayVsWeekendGraph}
+
+dataCompleteweekday<-dataComplete[dataComplete$weekdayfactor=="weekday",]
+dataCompleteweekend<-dataComplete[dataComplete$weekdayfactor=="weekend",]
+
+
+dataCompleteMeanByintervalWday<-as.data.frame(with(dataCompleteweekday
+                                                   ,tapply(steps,interval,mean,na.rm=T)))
+dataCompleteMeanByintervalWday$interval<-row.names(dataCompleteMeanByintervalWday)
+colnames(dataCompleteMeanByintervalWday)<-c("mean","interval")
+dataCompleteMeanByintervalWday$weekdayfactor<-"weekday"
+
+
+dataCompleteMeanByintervalWend<-as.data.frame(with(dataCompleteweekend
+                                                   ,tapply(steps,interval,mean,na.rm=T)))
+dataCompleteMeanByintervalWend$interval<-row.names(dataCompleteMeanByintervalWend)
+colnames(dataCompleteMeanByintervalWend)<-c("mean","interval")
+dataCompleteMeanByintervalWend$weekdayfactor<-"weekend"
+
+dataFinalGraph <- rbind(dataCompleteMeanByintervalWday,dataCompleteMeanByintervalWend)
+dataFinalGraph$weekdayfactor <- factor(dataFinalGraph$weekdayfactor)
+
+
+library("lattice", lib.loc="d:/Program Files/R/R-3.1.1/library")
+xyplot(mean ~ interval | weekdayfactor,data=dataFinalGraph,layout=c(1,2),type="l",ylim=c(0,3))
+```
+
+
+On average, the person walks less steps per 5 sec on weekends.
+
+
